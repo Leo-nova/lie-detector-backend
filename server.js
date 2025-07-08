@@ -21,7 +21,6 @@ app.post('/analyze', async (req, res) => {
         return res.status(400).json({ error: '請求中缺少需要分析的文字 (text)。' });
     }
 
-    // 準備要發送給 Gemini API 的完整指令 (Prompt)
     const prompt = `**最高指令：你所有的輸出，都必須、也只能使用繁體中文（台灣）。**
 
 你是一個極度嚴謹、客觀且中立的事實查核助理。你的任務是分析使用者提供的文本，並遵循以下流程與鐵則：
@@ -70,7 +69,6 @@ app.post('/analyze', async (req, res) => {
     };
 
     try {
-        // 使用我們的金鑰，向 Gemini API 發送請求
         const apiResponse = await fetch(geminiApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -79,17 +77,23 @@ app.post('/analyze', async (req, res) => {
 
         if (!apiResponse.ok) {
             const errorText = await apiResponse.text();
-            throw new Error(`Gemini API 錯誤: ${apiResponse.status} ${errorText}`);
+            console.error(`Gemini API Error: ${apiResponse.status}`, errorText);
+            return res.status(apiResponse.status).json({ error: `AI 伺服器錯誤: ${errorText}` });
         }
 
         const data = await apiResponse.json();
 
-        // 將從 Gemini 得到的結果，原封不動地回傳給前端 APP
-        const content = JSON.parse(data.candidates[0].content.parts[0].text);
+        if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0].text) {
+            console.error('來自 Gemini API 的回應結構無效:', data);
+            return res.status(500).json({ error: 'AI 未能生成有效的分析結果。' });
+        }
+        
+        const contentText = data.candidates[0].content.parts[0].text;
+        const content = JSON.parse(contentText);
         res.json(content);
 
     } catch (error) {
-        console.error('伺服器錯誤:', error);
+        console.error('伺服器內部錯誤:', error);
         res.status(500).json({ error: '伺服器在處理請求時發生內部錯誤。' });
     }
 });
