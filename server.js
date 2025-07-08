@@ -83,13 +83,24 @@ app.post('/analyze', async (req, res) => {
 
         const data = await apiResponse.json();
 
+        // **強化 robustness**：檢查 Gemini API 的回應是否符合預期結構
         if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0].text) {
             console.error('來自 Gemini API 的回應結構無效:', data);
             return res.status(500).json({ error: 'AI 未能生成有效的分析結果。' });
         }
         
         const contentText = data.candidates[0].content.parts[0].text;
-        const content = JSON.parse(contentText);
+        
+        // **強化 robustness**：安全地解析 JSON，避免因格式錯誤而崩潰
+        let content;
+        try {
+            content = JSON.parse(contentText);
+        } catch (parseError) {
+            console.error('JSON 解析錯誤:', parseError);
+            console.error('收到的原始文本:', contentText);
+            return res.status(500).json({ error: 'AI 回應格式錯誤，無法解析。' });
+        }
+        
         res.json(content);
 
     } catch (error) {
